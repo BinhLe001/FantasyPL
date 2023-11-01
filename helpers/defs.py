@@ -1,0 +1,2 @@
+LEAGUE_ID = 46331
+DATE_FORMAT = "%Y-%m-%d"
