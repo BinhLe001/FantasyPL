@@ -1,14 +1,14 @@
 from pyspark.sql import SparkSession
 from typing import Dict
-from paths.path_builder import PathBuilder
-from premier_league.external import (
+from external.api import (
     fetch_league_details,
     fetch_draft_details,
     fetch_static_details,
 )
+from paths import paths
 from datetime import date
-from defs import DATE_FORMAT
-from spark import get_spark_session
+from helpers.defs import DATE_FORMAT
+from helpers.spark import get_spark_session
 
 
 def create_non_null_dataset(json_data: Dict) -> Dict:
@@ -47,7 +47,7 @@ def store_teams_df(spark: SparkSession, teams_json: Dict, run_date: date) -> Non
         .withColumnRenamed("player_first_name", "first_name")
         .withColumnRenamed("player_last_name", "last_name")
     )
-    path = PathBuilder(name="teams", run_date=run_date, extension="csv").next_path()
+    path = paths.teams_path(run_date).next_path()
     teams_df.repartition(1).write.csv(path, header=True)
 
 
@@ -67,7 +67,7 @@ def store_standings_df(
     """
     standings_df = spark.createDataFrame(create_non_null_dataset(standings_json))
     standings_df = standings_df.withColumnRenamed("league_entry", "team_id")
-    path = PathBuilder(name="standings", run_date=run_date, extension="csv").next_path()
+    path = paths.standings_path(run_date).next_path()
     standings_df.repartition(1).write.csv(path, header=True)
 
 
@@ -91,7 +91,7 @@ def store_matches_df(spark: SparkSession, matches_json: Dict, run_date: date) ->
         .withColumnRenamed("league_entry_1_points", "team_1_points")
         .withColumnRenamed("league_entry_2_points", "team_2_points")
     )
-    path = PathBuilder(name="matches", run_date=run_date, extension="csv").next_path()
+    path = paths.matches_path(run_date).next_path()
     matches_df.repartition(1).write.csv(path, header=True)
 
 
@@ -114,7 +114,7 @@ def store_draft_df(spark: SparkSession, draft_json: Dict, run_date: date) -> Non
         .withColumnRenamed("entry_name", "team_name")
         .drop("player_first_name", "player_last_name")
     )
-    path = PathBuilder(name="draft", run_date=run_date, extension="csv").next_path()
+    path = paths.draft_path(run_date).next_path()
     draft_df.repartition(1).write.csv(path, header=True)
 
 
@@ -128,7 +128,7 @@ def store_players_df(spark: SparkSession, players_json: Dict, run_date: date) ->
         .withColumnRenamed("element_id", "id")
         .withColumnRenamed("team", "club_id")
     )
-    path = PathBuilder(name="players", run_date=run_date, extension="csv").next_path()
+    path = paths.players_path(run_date).next_path()
     players_df.repartition(1).write.csv(path, header=True)
 
 
@@ -147,8 +147,13 @@ def store_positions_df(
     +-------------+---+-----------+-----------------+-------------+-------------------+
     """
     positions_df = spark.createDataFrame(create_non_null_dataset(positions_json))
-    positions_df = positions_df.withColumnRenamed("element_count", "count")
-    path = PathBuilder(name="positions", run_date=run_date, extension="csv").next_path()
+    positions_df = (
+        positions_df.withColumnRenamed("element_count", "count")
+        .withColumnRenamed("singular_name", "position_name")
+        .withColumnRenamed("singular_name_short", "position_name_short")
+        .drop("plural_name", "plural_name_short")
+    )
+    path = paths.positions_path(run_date).next_path()
     positions_df.repartition(1).write.csv(path, header=True)
 
 
@@ -178,3 +183,4 @@ if __name__ == "__main__":
     store_players_df(spark, static_details["elements"], run_date)
     print("STORING POSITIONS DF")
     store_positions_df(spark, static_details["element_types"], run_date)
+    print("DONE!")
